@@ -16,10 +16,10 @@ use properties::animated_properties::AnimationValue;
 use shared_lock::Locked;
 use smallbitvec::{self, SmallBitVec};
 use smallvec::SmallVec;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::iter::{DoubleEndedIterator, Zip};
 use std::slice::Iter;
-use style_traits::{ToCss, ParseError, ParsingMode, StyleParseErrorKind};
+use style_traits::{CssWriter, ParseError, ParsingMode, StyleParseErrorKind, ToCss};
 use stylesheets::{CssRuleType, Origin, UrlExtraData};
 use super::*;
 use values::computed::Context;
@@ -306,8 +306,13 @@ impl PropertyDeclarationBlock {
     /// Find the value of the given property in this block and serialize it
     ///
     /// <https://dev.w3.org/csswg/cssom/#dom-cssstyledeclaration-getpropertyvalue>
-    pub fn property_value_to_css<W>(&self, property: &PropertyId, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
+    pub fn property_value_to_css<W>(
+        &self,
+        property: &PropertyId,
+        dest: &mut CssWriter<W>,
+    ) -> fmt::Result
+    where
+        W: Write,
     {
         // Step 1.1: done when parsing a string to PropertyId
 
@@ -611,12 +616,12 @@ impl PropertyDeclarationBlock {
     pub fn single_value_to_css<W>(
         &self,
         property: &PropertyId,
-        dest: &mut W,
+        dest: &mut CssWriter<W>,
         computed_values: Option<&ComputedValues>,
         custom_properties_block: Option<&PropertyDeclarationBlock>,
     ) -> fmt::Result
     where
-        W: fmt::Write,
+        W: Write,
     {
         match property.as_shorthand() {
             Err(_longhand_or_custom) => {
@@ -740,8 +745,9 @@ impl PropertyDeclarationBlock {
 
 impl ToCss for PropertyDeclarationBlock {
     // https://drafts.csswg.org/cssom/#serialize-a-css-declaration-block
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
     {
         let mut is_first_serialization = true; // trailing serializations should have a prepended space
 
@@ -846,14 +852,14 @@ impl ToCss for PropertyDeclarationBlock {
                         }
                         #[cfg(feature = "gecko")]
                         (_, Some(sys)) => {
-                            sys.to_css(&mut v)?;
+                            sys.to_css(&mut CssWriter::new(&mut v))?;
                             AppendableValue::Css {
                                 css: &v,
                                 with_variables: false,
                             }
                         }
                         (other, _) => {
-                            append_declaration_value(&mut v, other)?;
+                            append_declaration_value(&mut CssWriter::new(&mut v), other)?;
 
                             // Substep 6
                             if v.is_empty() {
@@ -952,10 +958,12 @@ pub enum AppendableValue<'a, I>
 }
 
 /// Potentially appends whitespace after the first (property: value;) pair.
-fn handle_first_serialization<W>(dest: &mut W,
-                                 is_first_serialization: &mut bool)
-                                 -> fmt::Result
-    where W: fmt::Write,
+fn handle_first_serialization<W>(
+    dest: &mut CssWriter<W>,
+    is_first_serialization: &mut bool,
+) -> fmt::Result
+where
+    W: Write,
 {
     if !*is_first_serialization {
         dest.write_str(" ")
@@ -966,11 +974,13 @@ fn handle_first_serialization<W>(dest: &mut W,
 }
 
 /// Append a given kind of appendable value to a serialization.
-pub fn append_declaration_value<'a, W, I>(dest: &mut W,
-                                          appendable_value: AppendableValue<'a, I>)
-                                          -> fmt::Result
-    where W: fmt::Write,
-          I: Iterator<Item=&'a PropertyDeclaration>,
+pub fn append_declaration_value<'a, W, I>(
+    dest: &mut CssWriter<W>,
+    appendable_value: AppendableValue<'a, I>,
+) -> fmt::Result
+where
+    W: Write,
+    I: Iterator<Item=&'a PropertyDeclaration>,
 {
     match appendable_value {
         AppendableValue::Css { css, .. } => {
@@ -986,15 +996,17 @@ pub fn append_declaration_value<'a, W, I>(dest: &mut W,
 }
 
 /// Append a given property and value pair to a serialization.
-pub fn append_serialization<'a, W, I, N>(dest: &mut W,
-                                         property_name: &N,
-                                         appendable_value: AppendableValue<'a, I>,
-                                         importance: Importance,
-                                         is_first_serialization: &mut bool)
-                                         -> fmt::Result
-    where W: fmt::Write,
-          I: Iterator<Item=&'a PropertyDeclaration>,
-          N: ToCss,
+pub fn append_serialization<'a, W, I, N>(
+    dest: &mut CssWriter<W>,
+    property_name: &N,
+    appendable_value: AppendableValue<'a, I>,
+    importance: Importance,
+    is_first_serialization: &mut bool,
+) -> fmt::Result
+where
+    W: Write,
+    I: Iterator<Item=&'a PropertyDeclaration>,
+    N: ToCss,
 {
     handle_first_serialization(dest, is_first_serialization)?;
 

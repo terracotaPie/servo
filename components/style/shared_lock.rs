@@ -10,9 +10,10 @@ use atomic_refcell::{AtomicRefCell, AtomicRef, AtomicRefMut};
 use parking_lot::RwLock;
 use servo_arc::Arc;
 use std::cell::UnsafeCell;
-use std::fmt;
+use std::fmt::{self, Write};
 #[cfg(feature = "gecko")]
 use std::ptr;
+use style_traits::CssWriter;
 use stylesheets::Origin;
 
 /// A shared read/write lock that can protect multiple objects.
@@ -222,8 +223,13 @@ mod compile_time_assert {
 /// Like ToCss, but with a lock guard given by the caller.
 pub trait ToCssWithGuard {
     /// Serialize `self` in CSS syntax, writing to `dest`, using the given lock guard.
-    fn to_css<W>(&self, guard: &SharedRwLockReadGuard, dest: &mut W) -> fmt::Result
-    where W: fmt::Write;
+    fn to_css<W>(
+        &self,
+        guard: &SharedRwLockReadGuard,
+        dest: &mut CssWriter<W>,
+    ) -> fmt::Result
+    where
+        W: Write;
 
     /// Serialize `self` in CSS syntax using the given lock guard and return a string.
     ///
@@ -231,7 +237,7 @@ pub trait ToCssWithGuard {
     #[inline]
     fn to_css_string(&self, guard: &SharedRwLockReadGuard) -> String {
         let mut s = String::new();
-        self.to_css(guard, &mut s).unwrap();
+        self.to_css(guard, &mut CssWriter::new(&mut s)).unwrap();
         s
     }
 }
