@@ -13,8 +13,8 @@ use media_queries::Device;
 use parser::{Parse, ParserContext};
 use servo_arc::Arc;
 use shared_lock::{DeepCloneParams, DeepCloneWithLock, Locked, SharedRwLock, SharedRwLockReadGuard, ToCssWithGuard};
-use std::fmt;
-use style_traits::{ToCss, ParseError, StyleParseErrorKind};
+use std::fmt::{self, Write};
+use style_traits::{CssWriter, ParseError, StyleParseErrorKind, ToCss};
 use stylesheets::CssRules;
 use values::specified::url::SpecifiedUrl;
 
@@ -40,8 +40,14 @@ impl DocumentRule {
 }
 
 impl ToCssWithGuard for DocumentRule {
-    fn to_css<W>(&self, guard: &SharedRwLockReadGuard, dest: &mut W) -> fmt::Result
-    where W: fmt::Write {
+    fn to_css<W>(
+        &self,
+        guard: &SharedRwLockReadGuard,
+        dest: &mut CssWriter<W>,
+    ) -> fmt::Result
+    where
+        W: Write,
+    {
         dest.write_str("@-moz-document ")?;
         self.condition.to_css(dest)?;
         dest.write_str(" {")?;
@@ -167,8 +173,10 @@ impl UrlMatchingFunction {
 }
 
 impl ToCss for UrlMatchingFunction {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
         match *self {
             UrlMatchingFunction::Url(ref url) => {
                 url.to_css(dest)
@@ -219,8 +227,10 @@ impl DocumentCondition {
 }
 
 impl ToCss for DocumentCondition {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
         let mut iter = self.0.iter();
         let first = iter.next()
             .expect("Empty DocumentCondition, should contain at least one URL matching function");

@@ -16,8 +16,9 @@ use custom_properties::CustomPropertiesBuilder;
 use servo_arc::{Arc, UniqueArc};
 use smallbitvec::SmallBitVec;
 use std::borrow::Cow;
-use std::{fmt, mem, ops};
+use std::{mem, ops};
 use std::cell::RefCell;
+use std::fmt::{self, Write};
 
 #[cfg(feature = "servo")] use cssparser::RGBA;
 use cssparser::{CowRcStr, Parser, TokenSerializationType, serialize_identifier};
@@ -38,7 +39,7 @@ use selector_parser::PseudoElement;
 use selectors::parser::SelectorParseErrorKind;
 #[cfg(feature = "servo")] use servo_config::prefs::PREFS;
 use shared_lock::StylesheetGuards;
-use style_traits::{ParsingMode, ToCss, ParseError, StyleParseErrorKind};
+use style_traits::{CssWriter, ParseError, ParsingMode, StyleParseErrorKind, ToCss};
 use stylesheets::{CssRuleType, Origin, UrlExtraData};
 #[cfg(feature = "servo")] use values::Either;
 use values::generics::text::LineHeight;
@@ -852,9 +853,14 @@ impl ShorthandId {
     ///
     /// Returns an error if writing to the stream fails, or if the declarations
     /// do not map to a shorthand.
-    pub fn longhands_to_css<'a, W, I>(&self, declarations: I, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
-              I: Iterator<Item=&'a PropertyDeclaration>,
+    pub fn longhands_to_css<'a, W, I>(
+        &self,
+        declarations: I,
+        dest: &mut CssWriter<W>,
+    ) -> fmt::Result
+    where
+        W: Write,
+        I: Iterator<Item=&'a PropertyDeclaration>,
     {
         match *self {
             ShorthandId::All => {
@@ -1072,8 +1078,9 @@ impl UnparsedValue {
 }
 
 impl<'a, T: ToCss> ToCss for DeclaredValue<'a, T> {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
     {
         match *self {
             DeclaredValue::Value(ref inner) => inner.to_css(dest),
@@ -1101,8 +1108,9 @@ pub enum PropertyDeclarationId<'a> {
 }
 
 impl<'a> ToCss for PropertyDeclarationId<'a> {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
     {
         match *self {
             PropertyDeclarationId::Longhand(id) => dest.write_str(id.name()),
@@ -1147,7 +1155,6 @@ impl<'a> PropertyDeclarationId<'a> {
         match *self {
             PropertyDeclarationId::Longhand(id) => id.name().into(),
             PropertyDeclarationId::Custom(name) => {
-                use std::fmt::Write;
                 let mut s = String::new();
                 write!(&mut s, "--{}", name).unwrap();
                 s.into()
@@ -1174,13 +1181,14 @@ pub enum PropertyId {
 
 impl fmt::Debug for PropertyId {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        self.to_css(formatter)
+        self.to_css(&mut CssWriter::new(formatter))
     }
 }
 
 impl ToCss for PropertyId {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
     {
         match *self {
             PropertyId::Longhand(id) => dest.write_str(id.name()),
@@ -1328,7 +1336,6 @@ impl PropertyId {
             PropertyId::LonghandAlias(id, _) |
             PropertyId::Longhand(id) => id.name().into(),
             PropertyId::Custom(ref name) => {
-                use std::fmt::Write;
                 let mut s = String::new();
                 write!(&mut s, "--{}", name).unwrap();
                 s.into()
@@ -1461,15 +1468,17 @@ pub enum PropertyDeclaration {
 
 impl fmt::Debug for PropertyDeclaration {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.id().to_css(f)?;
-        f.write_str(": ")?;
-        self.to_css(f)
+        let mut dest = CssWriter::new(f);
+        self.id().to_css(&mut dest)?;
+        dest.write_str(": ")?;
+        self.to_css(&mut dest)
     }
 }
 
 impl ToCss for PropertyDeclaration {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-        where W: fmt::Write,
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
     {
         match *self {
             % for property in data.longhands:

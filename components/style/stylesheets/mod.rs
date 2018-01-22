@@ -31,7 +31,7 @@ use parser::{ParserContext, ParserErrorContext};
 use servo_arc::Arc;
 use shared_lock::{DeepCloneParams, DeepCloneWithLock, Locked, SharedRwLock, SharedRwLockReadGuard, ToCssWithGuard};
 use std::fmt;
-use style_traits::ParsingMode;
+use style_traits::{CssWriter, ParsingMode};
 
 pub use self::counter_style_rule::CounterStyleRule;
 pub use self::document_rule::DocumentRule;
@@ -347,7 +347,7 @@ impl DeepCloneWithLock for CssRule {
 
 impl ToCssWithGuard for CssRule {
     // https://drafts.csswg.org/cssom/#serialize-a-css-rule
-    fn to_css<W>(&self, guard: &SharedRwLockReadGuard, dest: &mut W) -> fmt::Result
+    fn to_css<W>(&self, guard: &SharedRwLockReadGuard, dest: &mut CssWriter<W>) -> fmt::Result
     where W: fmt::Write {
         match *self {
             CssRule::Namespace(ref lock) => lock.read_with(guard).to_css(guard, dest),

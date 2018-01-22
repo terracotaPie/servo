@@ -21,7 +21,7 @@ use style::properties::{DeclarationSource, Importance, PropertyDeclarationBlock,
 use style::properties::{parse_one_declaration_into, parse_style_attribute, SourcePropertyDeclaration};
 use style::selector_parser::PseudoElement;
 use style::shared_lock::Locked;
-use style_traits::{ParsingMode, ToCss};
+use style_traits::{CssWriter, ParsingMode, ToCss};
 
 // http://dev.w3.org/csswg/cssom/#the-cssstyledeclaration-interface
 #[dom_struct]
@@ -225,7 +225,7 @@ impl CSSStyleDeclaration {
         let mut string = String::new();
 
         self.owner.with_block(|pdb| {
-            pdb.property_value_to_css(&id, &mut string).unwrap();
+            pdb.property_value_to_css(&id, &mut CssWriter::new(&mut string)).unwrap();
         });
 
         DOMString::from(string)
@@ -392,7 +392,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
 
         let mut string = String::new();
         self.owner.mutate_associated_block(|pdb, changed| {
-            pdb.property_value_to_css(&id, &mut string).unwrap();
+            pdb.property_value_to_css(&id, &mut CssWriter::new(&mut string)).unwrap();
             *changed = pdb.remove_property(&id);
         });
 

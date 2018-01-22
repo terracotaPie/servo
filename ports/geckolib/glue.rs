@@ -155,7 +155,7 @@ use style::values::distance::ComputeSquaredDistance;
 use style::values::specified;
 use style::values::specified::gecko::IntersectionObserverRootMargin;
 use style::values::specified::source_size_list::SourceSizeList;
-use style_traits::{ParsingMode, StyleParseErrorKind, ToCss};
+use style_traits::{CssWriter, ParsingMode, StyleParseErrorKind, ToCss};
 use super::error_reporter::ErrorReporter;
 use super::stylesheet_loader::StylesheetLoader;
 
@@ -707,8 +707,12 @@ pub extern "C" fn Servo_AnimationValue_Serialize(value: RawServoAnimationValueBo
     let uncomputed_value = AnimationValue::as_arc(&value).uncompute();
     let mut string = String::new();
     let rv = PropertyDeclarationBlock::with_one(uncomputed_value, Importance::Normal)
-        .single_value_to_css(&get_property_id_from_nscsspropertyid!(property, ()), &mut string,
-                             None, None /* No extra custom properties */);
+        .single_value_to_css(
+            &get_property_id_from_nscsspropertyid!(property, ()),
+            &mut CssWriter::new(&mut string),
+            None,
+            None /* No extra custom properties */,
+        );
     debug_assert!(rv.is_ok());
 
     let buffer = unsafe { buffer.as_mut().unwrap() };
@@ -734,7 +738,7 @@ pub extern "C" fn Servo_Shorthand_AnimationValues_Serialize(shorthand_property: 
         values.iter().map(|v| AnimationValue::as_arc(unsafe { &&*v.mRawPtr }).uncompute()).collect();
 
     let mut string = String::new();
-    let rv = shorthand.longhands_to_css(declarations.iter(), &mut string);
+    let rv = shorthand.longhands_to_css(declarations.iter(), &mut CssWriter::new(&mut string));
     if rv.is_ok() {
         let buffer = unsafe { buffer.as_mut().unwrap() };
         buffer.assign_utf8(&string);
@@ -1458,7 +1462,7 @@ macro_rules! impl_basic_rule_funcs_without_getter {
             let global_style_data = &*GLOBAL_STYLE_DATA;
             let guard = global_style_data.shared_lock.read();
             let rule = Locked::<$rule_type>::as_arc(&rule);
-            rule.read_with(&guard).to_css(&guard, unsafe { result.as_mut().unwrap() }).unwrap();
+            rule.read_with(&guard).to_css(&guard, &mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
         }
     }
 }
@@ -1829,7 +1833,7 @@ pub extern "C" fn Servo_Keyframe_GetKeyText(
     result: *mut nsAString
 ) {
     read_locked_arc(keyframe, |keyframe: &Keyframe| {
-        keyframe.selector.to_css(unsafe { result.as_mut().unwrap() }).unwrap()
+        keyframe.selector.to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap()
     })
 }
 
@@ -1969,7 +1973,7 @@ pub extern "C" fn Servo_PageRule_SetStyle(rule: RawServoPageRuleBorrowed,
 pub extern "C" fn Servo_SupportsRule_GetConditionText(rule: RawServoSupportsRuleBorrowed,
                                                       result: *mut nsAString) {
     read_locked_arc(rule, |rule: &SupportsRule| {
-        rule.condition.to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+        rule.condition.to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
     })
 }
 
@@ -1977,7 +1981,7 @@ pub extern "C" fn Servo_SupportsRule_GetConditionText(rule: RawServoSupportsRule
 pub extern "C" fn Servo_DocumentRule_GetConditionText(rule: RawServoDocumentRuleBorrowed,
                                                       result: *mut nsAString) {
     read_locked_arc(rule, |rule: &DocumentRule| {
-        rule.condition.to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+        rule.condition.to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
     })
 }
 
@@ -1985,7 +1989,7 @@ pub extern "C" fn Servo_DocumentRule_GetConditionText(rule: RawServoDocumentRule
 pub extern "C" fn Servo_FontFeatureValuesRule_GetFontFamily(rule: RawServoFontFeatureValuesRuleBorrowed,
                                                             result: *mut nsAString) {
     read_locked_arc(rule, |rule: &FontFeatureValuesRule| {
-        rule.font_family_to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+        rule.font_family_to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
     })
 }
 
@@ -1993,7 +1997,7 @@ pub extern "C" fn Servo_FontFeatureValuesRule_GetFontFamily(rule: RawServoFontFe
 pub extern "C" fn Servo_FontFeatureValuesRule_GetValueText(rule: RawServoFontFeatureValuesRuleBorrowed,
                                                            result: *mut nsAString) {
     read_locked_arc(rule, |rule: &FontFeatureValuesRule| {
-        rule.value_to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+        rule.value_to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
     })
 }
 
@@ -2660,7 +2664,7 @@ pub extern "C" fn Servo_DeclarationBlock_Equals(
 pub extern "C" fn Servo_DeclarationBlock_GetCssText(declarations: RawServoDeclarationBlockBorrowed,
                                                     result: *mut nsAString) {
     read_locked_arc(declarations, |decls: &PropertyDeclarationBlock| {
-        decls.to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+        decls.to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
     })
 }
 
@@ -2682,7 +2686,7 @@ pub extern "C" fn Servo_DeclarationBlock_SerializeOneValue(
     let custom_properties = Locked::<PropertyDeclarationBlock>::arc_from_borrowed(&custom_properties);
     let custom_properties = custom_properties.map(|block| block.read_with(&guard));
     let rv = decls.single_value_to_css(
-        &property_id, &mut string, computed_values, custom_properties);
+        &property_id, &mut CssWriter::new(&mut string), computed_values, custom_properties);
     debug_assert!(rv.is_ok());
 
     let buffer = unsafe { buffer.as_mut().unwrap() };
@@ -2706,7 +2710,7 @@ pub extern "C" fn Servo_SerializeFontValueForCanvas(
         };
 
         let mut string = String::new();
-        let rv = longhands.to_css_for_canvas(&mut string);
+        let rv = longhands.to_css_for_canvas(&mut CssWriter::new(&mut string));
         debug_assert!(rv.is_ok());
 
         let buffer = unsafe { buffer.as_mut().unwrap() };
@@ -2757,7 +2761,7 @@ unsafe fn get_property_value(
     // Using an unchecked read here improves our performance by ~10% on the
     // microbenchmark in bug 1355599.
     read_locked_arc_unchecked(declarations, |decls: &PropertyDeclarationBlock| {
-        decls.property_value_to_css(&property_id, value.as_mut().unwrap()).unwrap();
+        decls.property_value_to_css(&property_id, &mut CssWriter::new(value.as_mut().unwrap())).unwrap();
     })
 }
 
@@ -2933,7 +2937,7 @@ pub extern "C" fn Servo_DeclarationBlock_HasCSSWideKeyword(
 #[no_mangle]
 pub extern "C" fn Servo_MediaList_GetText(list: RawServoMediaListBorrowed, result: *mut nsAString) {
     read_locked_arc(list, |list: &MediaList| {
-        list.to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+        list.to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
     })
 }
 
@@ -2989,7 +2993,7 @@ pub extern "C" fn Servo_MediaList_GetMediumAt(
 ) -> bool {
     read_locked_arc(list, |list: &MediaList| {
         if let Some(media_query) = list.media_queries.get(index as usize) {
-            media_query.to_css(unsafe { result.as_mut().unwrap() }).unwrap();
+            media_query.to_css(&mut CssWriter::new(unsafe { result.as_mut().unwrap() })).unwrap();
             true
         } else {
             false
@@ -4402,7 +4406,7 @@ pub extern "C" fn Servo_GetCustomPropertyValue(
         None => return false,
     };
 
-    computed_value.to_css(unsafe { value.as_mut().unwrap() }).unwrap();
+    computed_value.to_css(&mut CssWriter::new(unsafe { value.as_mut().unwrap() })).unwrap();
     true
 }
 
